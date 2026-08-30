@@ -1,0 +1,63 @@
+﻿<!--
+See readme for building instructions.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Version>1.0.0</Version>  
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Boogie.Provers.TPTP</AssemblyName>
+    <!-- Needed to copy the dependencies into the output path, so they can be repackaged -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
+      <PackageReference Include="Boogie.Provers.SMTLib" Version="3.5.5"/>
+    </ItemGroup>
+
+    <!-- 
+      Dafny loads the plugin at runtime, which forbids any kind of dependencies outside what has already been loaded.
+      This is a workaround - all dependencies will be packaged with the plugin
+    -->
+    <Target Name="EmbedDependencies" AfterTargets="Build">
+      <PropertyGroup>
+	      <IlrepackCommand>dotnet tool run ilrepack \
+            /out:$(OutputPath)Boogie.Provers.TPTP.dll \
+            /internalize \
+            /illink \
+            $(OutputPath)Boogie.Provers.TPTP.dll \
+            $(OutputPath)Boogie.CodeContractsExtender.dll \
+            $(OutputPath)Microsoft.Bcl.AsyncInterfaces.dll \
+            $(OutputPath)Microsoft.Extensions.Configuration.Abstractions.dll \
+            $(OutputPath)Microsoft.Extensions.Configuration.Binder.dll \
+            $(OutputPath)Microsoft.Extensions.Configuration.dll \
+            $(OutputPath)Microsoft.Extensions.DependencyInjection.Abstractions.dll \
+            $(OutputPath)Microsoft.Extensions.DependencyInjection.dll \
+            $(OutputPath)Microsoft.Extensions.Logging.Abstractions.dll \
+            $(OutputPath)Microsoft.Extensions.Logging.Configuration.dll \
+            $(OutputPath)Microsoft.Extensions.Logging.Console.dll \
+            $(OutputPath)Microsoft.Extensions.Logging.dll \
+            $(OutputPath)Microsoft.Extensions.Options.ConfigurationExtensions.dll \
+            $(OutputPath)Microsoft.Extensions.Options.dll \
+            $(OutputPath)Microsoft.Extensions.Primitives.dll \
+            $(OutputPath)System.Diagnostics.DiagnosticSource.dll \
+            $(OutputPath)System.IO.Pipelines.dll \
+            $(OutputPath)System.Linq.Async.dll \
+            $(OutputPath)System.Text.Encodings.Web.dll \
+            $(OutputPath)System.Text.Json.dll
+        </IlrepackCommand>
+      </PropertyGroup>
+      <Exec Command="$(IlrepackCommand)"/>
+    </Target>
+
+    <Target Name="Restore" BeforeTargets="Build">
+        <Exec Command="dotnet tool restore"></Exec>
+    </Target>
+
+</Project>
