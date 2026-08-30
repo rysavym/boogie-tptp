@@ -4,6 +4,20 @@
 
 A plugin for Boogie that allows verifying Boogie BPL files with TPTP.
 
+## Important notes
+
+- The plugin was developed for Dafny 4.11.0, which uses Boogie 3.5.5.
+
+- The plugin does **not** have support for bitvectors, floats, strings and regular expressions,
+and will reject all Boogie programs with those features.
+
+- As TPTP is a language for theorem provers, any Boogie program with invalid specification
+will always cause the plugin to search for a (non-existent) correctness proof forever. Hence, 
+the plugin can prove a program correct, but it will not give you a counterexample when the 
+input program is incorrect. Instead, it will run until the time limit is up.
+
+- The plugin is highly experimental.
+
 ## Building
 
 ```sh
@@ -54,7 +68,7 @@ Supported plugin options:
 - `VERBOSITY=<int>`: follows Microsoft Logger conventions, i.e. `0` is `Trace`, `1` is `Debug`, `2` is `Information`, `3` is `Warning`, `4` is `Error`, `5` is `Critical` and `6` is `None`. Any other value will be ignored and fall back to the default value `2` (`Information`). On `Debug`, the `stdout` and `stderr` of the solver is written to console.
 - `TIME_LIMIT=<uint>`: the time limit per verification condition in miliseconds.
 - `MEMORY_LIMIT=<int>`: the memory limit for the prover in megabytes.
-- `USE_ARRAY_THEORY=<bool>`: whether to use Vampire's built-in `$array` syntax to encode Boogie maps. Beware that Vampire's arrays are extensional, while Boogie maps are not extensional. This discrepancy may lead to unsoundness, and is confirmed to be unsound with Dafny. Defaults to `false`. Also note that the `/useArrayAxioms` option of Boogie is ignored.
+- `USE_ARRAY_THEORY=<bool>`: whether to use Vampire's built-in `$array` syntax to encode Boogie maps. Beware that Vampire's arrays are extensional, while Boogie maps are not extensional. This discrepancy may lead to unsoundness, and is [unsound with Dafny](https://github.com/dafny-lang/dafny/issues/2463). Defaults to `false`. Also note that the `/useArrayAxioms` option of Boogie is ignored.
 - `C:<string>`: pass `<string>` as an additional option to the prover command line. If you need multiple options, repeat this multiple times, e.g. `--mode casc` can be specified as `/proverOpt:C:--mode /proverOpt:C:casc`
 - `ENABLE_TYPE_ERASURE=<bool>`: do not use a polymorphic encoding and use Boogie's type erasure instead. Defaults to `false`. The `/typeEncoding` option of Boogie is ignored if this option is not explicitly set to true.
 
