@@ -11,6 +11,9 @@ A plugin for Boogie that allows verifying Boogie BPL files with TPTP.
 - The plugin does **not** have support for bitvectors, floats, strings and regular expressions,
 and will reject all Boogie programs with those features.
 
+- The plugin does **not** have support for triggers/e-matching, and will ignore triggers from the
+input file
+
 - As TPTP is a language for theorem provers, any Boogie program with invalid specification
 will always cause the plugin to search for a (non-existent) correctness proof forever. Hence, 
 the plugin can prove a program correct, but it will not give you a counterexample when the 
