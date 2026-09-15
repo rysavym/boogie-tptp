@@ -51,8 +51,8 @@ public static class TPTPNameUtils {
         // Add quotes if needed
         if (NeedsQuotes(name)) {
             // escape single quotes and backlashes
-            name = name.Replace("'", "\\'");
             name = name.Replace("\\", "\\\\");
+            name = name.Replace("'", "\\'");
 
             return '\'' + name + '\'';
         }
