@@ -19,6 +19,9 @@ will always cause the plugin to search for a (non-existent) correctness proof fo
 the plugin can prove a program correct, but it will not give you a counterexample when the 
 input program is incorrect. Instead, it will run until the time limit is up.
 
+- For sound verification, a custom Dafny patch is needed. For Dafny version 4.11.0, this
+patch is provided in this repository under `dafny-4.11.0-patch.diff`
+
 - The plugin is highly experimental.
 
 ## Building

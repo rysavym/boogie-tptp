@@ -1,0 +1,139 @@
+diff --git a/Source/DafnyCore/DafnyOptions.cs b/Source/DafnyCore/DafnyOptions.cs
+index a0f611ebe..43afb08c2 100644
+--- a/Source/DafnyCore/DafnyOptions.cs
++++ b/Source/DafnyCore/DafnyOptions.cs
+@@ -938,6 +938,14 @@ namespace Microsoft.Dafny {
+       return !ProverOptions.Any(x => x.StartsWith("SOLVER=") && !x.EndsWith("=z3"));
+     }
+ 
++    public bool IsUsingVampire() {
++      return ProverOptions.Any(x => x.StartsWith("SOLVER=") && x.EndsWith("=vampire"));
++    }
++
++    public bool IsUsingTPTP() {
++      return ProverDllName.Contains("TPTP");
++    }
++
+     public void ProcessSolverOptions(ErrorReporter errorReporter, IOrigin token) {
+       if (IsUsingZ3()) {
+         var z3Version = SetZ3ExecutablePath(errorReporter, token);
+diff --git a/Source/DafnyCore/Verifier/BoogieGenerator.BoogieFactory.cs b/Source/DafnyCore/Verifier/BoogieGenerator.BoogieFactory.cs
+index 6063dc2ef..9cb34fe96 100644
+--- a/Source/DafnyCore/Verifier/BoogieGenerator.BoogieFactory.cs
++++ b/Source/DafnyCore/Verifier/BoogieGenerator.BoogieFactory.cs
+@@ -719,6 +719,31 @@ namespace Microsoft.Dafny {
+       return new Bpl.NAryExpr(tok, new Bpl.FunctionCall(new Bpl.IdentifierExpr(tok, name, Bpl.Type.Int)), new List<Bpl.Expr> { arr });
+     }
+ 
++    static Bpl.Expr BplExists(IEnumerable<Bpl.Variable> args_in, Bpl.Expr body) {
++      Contract.Requires(args_in != null);
++      Contract.Requires(body != null);
++      Contract.Ensures(Contract.Result<Bpl.Expr>() != null);
++      var args = new List<Bpl.Variable>(args_in);
++      if (args.Count == 0) {
++        return body;
++      } else {
++        return new Bpl.ExistsExpr(body.tok, args, body); // NO_TRIGGER
++      }
++    }
++
++    static Bpl.Expr BplExists(IEnumerable<Bpl.Variable> args_in, Bpl.Trigger trg, Bpl.Expr body) {
++      if (trg == null) {
++        return BplExists(args_in, body); // NO_TRIGGER
++      } else {
++        var args = new List<Bpl.Variable>(args_in);
++        if (args.Count == 0) {
++          return body;
++        } else {
++          return new Bpl.ExistsExpr(body.tok, args, trg, body);
++        }
++      }
++    }
++
+     static Bpl.Expr BplForall(IEnumerable<Bpl.Variable> args_in, Bpl.Expr body) {
+       Contract.Requires(args_in != null);
+       Contract.Requires(body != null);
+diff --git a/Source/DafnyCore/Verifier/Datatypes/BoogieGenerator.DataTypes.cs b/Source/DafnyCore/Verifier/Datatypes/BoogieGenerator.DataTypes.cs
+index 9412b10af..4c8bd161d 100644
+--- a/Source/DafnyCore/Verifier/Datatypes/BoogieGenerator.DataTypes.cs
++++ b/Source/DafnyCore/Verifier/Datatypes/BoogieGenerator.DataTypes.cs
+@@ -124,7 +124,32 @@ namespace Microsoft.Dafny {
+           eqs = BplAnd(eqs, eq);
+         }
+ 
+-        var ax = BplForall(new List<Variable> { aVar, bVar }, trigger, BplImp(ante, BplIff(dtEqual, eqs)));
++        Expr ax;
++        if (options.IsUsingTPTP() || options.IsUsingVampire()) { 
++          // Add an existential type guard
++          List<Variable> dtaCtorVars = [];
++          List<Expr> dtaCtorVarsExpr = [];
++          List<Variable> dtbCtorVars = [];
++          List<Expr> dtbCtorVarsExpr = [];
++          for (var i = 0; i < ctor.Formals.Count; i++) {
++            var arg = ctor.Formals[i];
++            dtaCtorVars.Add(BplBoundVar("x" + i, TrType(arg.Type), out var xi));
++            dtbCtorVars.Add(BplBoundVar("y" + i, TrType(arg.Type), out var yi));
++            dtaCtorVarsExpr.Add(xi);
++            dtbCtorVarsExpr.Add(yi);
++          }
++
++          var dtaCtor = FunctionCall(ctor.Origin, ctor.FullName, Predef.DatatypeType, dtaCtorVarsExpr);
++          var dtbCtor = FunctionCall(ctor.Origin, ctor.FullName, Predef.DatatypeType, dtbCtorVarsExpr);
++          var aEqDta = FunctionCall(ctor.Origin, "==", Bpl.Type.Bool, dtaCtor, a);
++          var bEqDtb = FunctionCall(ctor.Origin, "==", Bpl.Type.Bool, dtbCtor, b);
++          var guard = BplExists([ ..dtaCtorVars, ..dtbCtorVars ], BplAnd(aEqDta, bEqDtb));
++
++          ax = BplForall(new List<Variable> { aVar, bVar }, trigger, BplImp(guard, BplImp(ante, BplIff(dtEqual, eqs))));
++        } else { 
++          ax = BplForall(new List<Variable> { aVar, bVar }, trigger, BplImp(ante, BplIff(dtEqual, eqs)));
++        }
++
+         AddOtherDefinition(constructorFunctions[ctor], new Bpl.Axiom(dt.Origin, ax, $"Datatype extensional equality definition: {ctor.FullName}"));
+       }
+     }
+@@ -143,7 +168,44 @@ namespace Microsoft.Dafny {
+         var lhs = FunctionCall(dt.Origin, dtEqualName, Bpl.Type.Bool, a, b);
+         var rhs = Bpl.Expr.Eq(a, b);
+ 
+-        var ax = BplForall(new List<Variable> { aVar, bVar }, BplTrigger(lhs), BplIff(lhs, rhs));
++        Expr ax;
++        if (options.IsUsingTPTP() || options.IsUsingVampire()) { 
++          // existential type guard
++          Bpl.Expr ctorsA = Bpl.Expr.False;
++          Bpl.Expr ctorsB = Bpl.Expr.False;
++          List<Variable> allBoundVars = [];
++          for (int i = 0; i < dt.Ctors.Count; i++) {
++            var ctor = dt.Ctors[i];
++            List<Variable> dtaCtorVars = [];
++            List<Expr> dtaCtorVarsExpr = [];
++            List<Variable> dtbCtorVars = [];
++            List<Expr> dtbCtorVarsExpr = [];
++            for (var j = 0; j < ctor.Formals.Count; j++) {
++              var arg = ctor.Formals[j];
++              var xiVar = BplBoundVar("c" + i + "x" + j, TrType(arg.Type), out var xi);
++              var yiVar = BplBoundVar("c" + i + "y" + j, TrType(arg.Type), out var yi);
++              dtaCtorVars.Add(xiVar);
++              dtbCtorVars.Add(yiVar);
++              dtaCtorVarsExpr.Add(xi);
++              dtbCtorVarsExpr.Add(yi);
++              allBoundVars.Add(xiVar);
++              allBoundVars.Add(yiVar);
++            }
++
++            var dtaCtor = FunctionCall(ctor.Origin, ctor.FullName, Predef.DatatypeType, dtaCtorVarsExpr);
++            var dtbCtor = FunctionCall(ctor.Origin, ctor.FullName, Predef.DatatypeType, dtbCtorVarsExpr);
++            var aEqDta = FunctionCall(ctor.Origin, "==", Bpl.Type.Bool, dtaCtor, a);
++            var bEqDtb = FunctionCall(ctor.Origin, "==", Bpl.Type.Bool, dtbCtor, b);
++            ctorsA = BplOr(aEqDta, ctorsA);
++            ctorsB = BplOr(bEqDtb, ctorsB);
++          }
++          var ctors = BplAnd(ctorsA, ctorsB);
++          var guard = BplExists(allBoundVars, ctors);
++          ax = BplForall(new List<Variable> { aVar, bVar }, BplTrigger(lhs), BplImp(guard, BplIff(lhs, rhs)));
++        } else {
++          ax = BplForall(new List<Variable> { aVar, bVar }, BplTrigger(lhs), BplIff(lhs, rhs));
++        }
++
+         sink.AddTopLevelDeclaration(new Bpl.Axiom(dt.Origin, ax, $"Datatype extensionality axiom: {dt.FullName}"));
+       }
+     }
