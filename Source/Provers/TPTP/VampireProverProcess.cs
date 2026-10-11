@@ -34,6 +34,31 @@ public partial class VampireProverProcess : TPTPProverProcess
         this.getResultCalled = false;
     }
 
+    private SolverOutcome SZSStatusToSolverOutcome(string status)
+    {
+        // Vampire also seems to print 'InstrOut', 'Interrupted' as a SZS status, which are however not in the SZS ontologies...
+
+        switch (status)
+        { 
+            case "Theorem": // the conjecture follows from the axioms -> valid
+                return SolverOutcome.Valid;
+            case "ContradictoryAxioms":
+                log.LogWarning("Contradictory axioms detected. Please report this as an issue.");
+                return SolverOutcome.Undetermined;
+            case "Satisfiable": // axioms have some models, some models of the axioms are models of the conjecture, but nothing else is known
+            case "GaveUp":
+                return SolverOutcome.Undetermined;
+            case "Unsatisfiable": // axioms are valid and the conjecture is unsatisfiable -> entire problem unsatisfiable -> invalid
+            case "CounterSatisfiable": // some model of the axioms is not a model of the conjecture -> invalid
+                return SolverOutcome.Invalid;
+            case "Timeout":
+                return SolverOutcome.TimeOut;
+            default:
+                log.LogWarning("Unknown SZS Status: {}", status);
+                return SolverOutcome.Undetermined;
+        }
+    }
+
     private void ParseLine(string line)
     {
         // try parse the resource count
@@ -44,62 +69,44 @@ public partial class VampireProverProcess : TPTPProverProcess
             return;
         }
 
-        // try parse the termination reason
+        // try parse the SZS status
+        // https://szs.tptp.org/
+        match = Regex.Match(line, @"% SZS status\s+(\S+)");
+        if (match.Success)
+        {
+            var actualStatus = match.Groups[1].Value;
+            outcome = SZSStatusToSolverOutcome(actualStatus);
+        }
+
+        // sometimes, Vampire does not print the SZS status
         // https://github.com/vprover/vampire/blob/ec9595e79e4890d82cf090223c6cda5b73805bbc/Shell/Statistics.hpp#L39
-        // Refutation, Satisfiable, Refutation not found (?), Time limit, Instruction limit, Memory limit, Activation limit,
-        // Unknown, Inappropriate 
+        // Refutation, Satisfiable, Refutation not found, Time limit, Instruction limit, Memory limit, Activation limit, Unknown, Inappropriate 
         if (line.Contains("Termination reason"))
         {
-            if (line.Contains("Refutation"))
+            if (line.Contains("Memory limit"))
             {
-                if (line.Contains("Refutation not found"))
-                {
-                    outcome = SolverOutcome.Invalid;
-                }
-                else
-                {
-                    outcome = SolverOutcome.Valid;
-                }
+                outcome = SolverOutcome.OutOfMemory;
             }
-            else if (line.Contains("Satisfiable"))
+            else if (line.Contains("Instruction limit"))
+            {
+                outcome = SolverOutcome.OutOfResource;
+            }
+            else if (line.Contains("Unknown")) // in case it crashed
+            {
+                outcome = SolverOutcome.Undetermined;
+            }
+            else if (line.Contains("Refutation not found"))
             {
                 outcome = SolverOutcome.Invalid;
             }
             else if (line.Contains("Time limit"))
             {
-                outcome = SolverOutcome.TimeOut;
-            }
-            else if (line.Contains("Memory limit"))
-            {
-                outcome = SolverOutcome.OutOfMemory;
+                outcome = SolverOutcome.TimeOut; // in case not in casc mode
             }
             else if (line.Contains("Activation limit"))
             {
                 outcome = SolverOutcome.OutOfResource;
             }
-            else if (line.Contains("Instruction limit"))
-            { 
-                outcome = SolverOutcome.OutOfResource;
-            }
-            else if (line.Contains("Unknown"))
-            {
-                outcome = SolverOutcome.Undetermined;
-            }
-            else if (line.Contains("Inappropriate"))
-            {
-                // inappropriate strategy
-                outcome = SolverOutcome.Undetermined;
-            }
-            else
-            {
-                log.LogWarning("Could not determine termination reason: {}", line);
-            }
-        }
-        // in CASC and Portfolio mode, the timeout does not get 
-        // reported via 'Termination Reason' but via SZS
-        else if (line.Contains("SZS status Timeout"))
-        {
-            outcome = SolverOutcome.TimeOut;
         }
     }
 
