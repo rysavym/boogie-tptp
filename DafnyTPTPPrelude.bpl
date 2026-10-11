@@ -1477,10 +1477,10 @@ axiom (forall u: Box ::
 function Map#Glue(Set, [Box]Box, Ty): Map;
 axiom (forall a: Set, b: [Box]Box, t: Ty ::
   { Map#Domain(Map#Glue(a, b, t)) }
-  Map#Domain(Map#Glue(a, b, t)) == a);
+  Map#Glue(a, b, t) != Map#Empty() ==> Map#Domain(Map#Glue(a, b, t)) == a);
 axiom (forall a: Set, b: [Box]Box, t: Ty ::
   { Map#Elements(Map#Glue(a, b, t)) }
-  Map#Elements(Map#Glue(a, b, t)) == b);
+  Map#Glue(a, b, t) != Map#Empty() ==> Map#Elements(Map#Glue(a, b, t)) == b);
 axiom (forall a: Set, b: [Box]Box, t0, t1: Ty ::
   { Map#Glue(a, b, TMap(t0, t1)) }
   // In the following line, no trigger needed, since the quantifier only gets used in negative contexts
