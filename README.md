@@ -19,9 +19,6 @@ will always cause the plugin to search for a (non-existent) correctness proof fo
 the plugin can prove a program correct, but it will not give you a counterexample when the 
 input program is incorrect. Instead, it will run until the time limit is up.
 
-- For sound verification, a custom Dafny patch is needed. For Dafny version 4.11.0, this
-patch is provided in this repository under `dafny-4.11.0-patch.diff`
-
 - The plugin is highly experimental.
 
 ## Building
@@ -34,15 +31,48 @@ dotnet build
 
 The dotnet tool restore is necessary for [ILRepack](https://github.com/gluck/il-repack), on which this project depends on.
 
-## Running with Dafny
-
 The compiled plugin is in the `bin` folder under `bin/<target>/<dotnet version>/Boogie.Provers.TPTP.dll`. 
 
-This file should be copied to the `dafny/Binaries` folder (but does not require rebuilding Dafny).
+## Running with Dafny
 
-After that, one can use the option `--solver-plugin` with `dafny verify` to use TPTP+Vampire instead of SMTLib+Z3.
-For sound verification, you must also specify to use the `DafnyTPTPPrelude.bpl` and also tell Dafny that you
-are using `vampire`:
+### Patching Dafny
+
+For sound verification, a custom Dafny patch is needed. 
+For Dafny version 4.11.0, this patch is provided in this repository under `dafny-4.11.0-patch.diff`.
+
+To apply the patch, clone the Dafny repository and checkout version `4.11.0`:
+
+```sh
+$ git clone "https://github.com/dafny-lang/dafny"
+$ cd dafny
+$ git checkout 4.11.0
+```
+
+Then download the patch and apply it:
+
+```sh
+$ git apply path/to/dafny-4.11.0-patch.diff
+```
+
+And compile Dafny as usual:
+
+```sh
+$ make
+```
+
+You can then run dafny via the `Scripts/dafny` executable.
+
+### Install the plugin
+
+Copy the compiled `Boogie.Provers.TPTP.dll` into the `dafny/Binaries` folder
+
+### Download the prelude
+
+Download the `DafnyTPTPPrelude.bpl`, which is also provided in this repository in the root.
+
+### Run the plugin
+
+Once you completed the previous steps, you can use the `--solver-plugin` and `--prelude` options with `dafny verify` to use TPTP+Vampire instead of SMTLib+Z3, together with the  `--boogie "/proverOpt:SOLVER=vampire"` necessary for notifying Dafny that Z3 is not in use: 
 
 ```sh
 dafny verify \
@@ -54,7 +84,7 @@ dafny verify \
 
 ## Specifying options
 
-One can specify options to the plugin via the `/proverOpt` option of Boogie. If running with Dafny, this has to be combined with the `--boogie` argument:
+One can specify options to the plugin via the `/proverOpt` option of Boogie. If running with Dafny, this has to be combined with the `--boogie` argument, e.g.:
 
 ```sh
 dafny verify \
