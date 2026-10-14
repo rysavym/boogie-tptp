@@ -1,22 +1,33 @@
 diff --git a/Source/DafnyCore/DafnyOptions.cs b/Source/DafnyCore/DafnyOptions.cs
-index a0f611ebe..43afb08c2 100644
+index a0f611ebe..14a77e954 100644
 --- a/Source/DafnyCore/DafnyOptions.cs
 +++ b/Source/DafnyCore/DafnyOptions.cs
-@@ -938,6 +938,14 @@ namespace Microsoft.Dafny {
-       return !ProverOptions.Any(x => x.StartsWith("SOLVER=") && !x.EndsWith("=z3"));
+@@ -934,8 +934,24 @@ namespace Microsoft.Dafny {
+       Ai.J_Intervals = true;
      }
  
++    public bool IsUsingSMTLib() { 
++      // SMTLib is in use if either no prover DLL is specified, or it is explicitly specified to be SMTLib
++      return ProverDllName == null || ProverDllName.Contains("SMTLib");
++    }
++
+     public bool IsUsingZ3() {
+-      return !ProverOptions.Any(x => x.StartsWith("SOLVER=") && !x.EndsWith("=z3"));
++      // Z3 is in use when the prover DLL name is either null (defaults to SMTLib) or specified to be SMTLib, and there is no other solver specified.
++      return (ProverDllName == null || ProverDllName.Contains("SMTLib")) && !ProverOptions.Any(x => x.StartsWith("SOLVER=") && !x.EndsWith("=z3"));
++    }
++
 +    public bool IsUsingVampire() {
-+      return ProverOptions.Any(x => x.StartsWith("SOLVER=") && x.EndsWith("=vampire"));
++      // Vampire is in use if either it is explicitly specified, or we are running TPTP mode without an explicit SOLVER option.
++      return ProverOptions.Any(x => x.StartsWith("SOLVER=") && x.EndsWith("=vampire")) || (IsUsingTPTP() && !ProverOptions.Any(x => x.StartsWith("SOLVER=") && !x.EndsWith("=vampire")));
 +    }
 +
 +    public bool IsUsingTPTP() {
-+      return ProverDllName.Contains("TPTP");
-+    }
-+
++      // TPTP is in use when the TPTP prover DLL is in use.
++      return ProverDllName != null && ProverDllName.Contains("TPTP");
+     }
+ 
      public void ProcessSolverOptions(ErrorReporter errorReporter, IOrigin token) {
-       if (IsUsingZ3()) {
-         var z3Version = SetZ3ExecutablePath(errorReporter, token);
 diff --git a/Source/DafnyCore/Verifier/BoogieGenerator.BoogieFactory.cs b/Source/DafnyCore/Verifier/BoogieGenerator.BoogieFactory.cs
 index 6063dc2ef..9cb34fe96 100644
 --- a/Source/DafnyCore/Verifier/BoogieGenerator.BoogieFactory.cs
